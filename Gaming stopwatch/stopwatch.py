@@ -35,7 +35,26 @@ class StopwatchGUI:
             'dota', 'csgo', 'overwatch', 'apex', 'gta', 'pubg',
             'cod', 'warzone', 'fifa', 'nba', 'madden', 'rocket',
             'discord', 'obs', 'twitch', 'code', 'studio', 'chrome',
-            'firefox', 'edge', 'excel', 'word', 'powerpoint', 'photoshop'
+            'firefox', 'edge', 'excel', 'word', 'powerpoint', 'photoshop',
+            'spotify', 'slack', 'teams', 'zoom', 'blender', 'unity',
+            'rider', 'pycharm', 'intellij', 'eclipse', 'notepad++'
+        ]
+        
+        # System processes to exclude
+        self.excluded_processes = [
+            'svchost', 'system', 'registry', 'smss', 'csrss', 'wininit',
+            'services', 'lsass', 'winlogon', 'dwm', 'conhost', 'fontdrvhost',
+            'taskhostw', 'sihost', 'ctfmon', 'explorer', 'searchhost',
+            'startmenuexperiencehost', 'runtimebroker', 'applicationframehost',
+            'systemsettings', 'shellexperiencehost', 'textinputhost',
+            'securityhealthservice', 'msedgewebview2', 'backgroundtaskhost',
+            'dashost', 'audiodg', 'wudfhost', 'spoolsv', 'dllhost',
+            'searchprotocolhost', 'searchfilterhost', 'searchindexer',
+            'microsoftedgeupdate', 'taskeng', 'consent', 'userinit',
+            'winstore', 'lockapp', 'gamebarpresencewriter', 'widget',
+            'widgetservice', 'csrss', 'lsass', 'sppsvc', 'wlanext',
+            'nvcontainer', 'nvdisplay.container', 'igfxem', 'igfxtray',
+            'python', 'pythonw'  # Exclude Python to avoid showing the stopwatch itself
         ]
         
         self.setup_ui()
@@ -60,21 +79,75 @@ class StopwatchGUI:
             pass
     
     def get_running_apps(self):
-        """Get list of running applications"""
+        """Get list of running user applications (excluding system processes)"""
         apps = {}
         try:
-            for proc in psutil.process_iter(['pid', 'name', 'exe']):
+            for proc in psutil.process_iter(['pid', 'name', 'exe', 'username']):
                 try:
                     name = proc.info['name']
-                    if name and name.endswith('.exe'):
-                        # Remove .exe extension
-                        display_name = name[:-4]
+                    if not name or not name.endswith('.exe'):
+                        continue
+                    
+                    # Remove .exe extension
+                    display_name = name[:-4]
+                    
+                    # Skip if in excluded list
+                    if display_name.lower() in self.excluded_processes:
+                        continue
+                    
+                    # Only include processes with a window or known apps
+                    # Filter out most system processes
+                    if self.is_user_app(proc, display_name):
                         apps[display_name] = proc.info
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     continue
         except:
             pass
         return apps
+    
+    def is_user_app(self, proc, app_name):
+        """Check if process is a user-facing application"""
+        try:
+            # Check if it's a known priority app
+            if self.is_priority_app(app_name):
+                return True
+            
+            # Get the executable path
+            exe = proc.info.get('exe')
+            if not exe:
+                return False
+            
+            exe_lower = exe.lower()
+            
+            # Exclude Windows system directories
+            system_paths = [
+                'c:\\windows\\system32',
+                'c:\\windows\\syswow64',
+                'c:\\windows\\winsxs',
+                'c:\\program files\\windows',
+                'c:\\program files (x86)\\windows'
+            ]
+            
+            if any(path in exe_lower for path in system_paths):
+                return False
+            
+            # Include if in common app directories
+            app_paths = [
+                'program files',
+                'users\\',
+                'appdata',
+                'steam',
+                'epic games'
+            ]
+            
+            if any(path in exe_lower for path in app_paths):
+                return True
+            
+            return False
+            
+        except:
+            return False
     
     def is_priority_app(self, app_name):
         """Check if application is a priority/common app"""
